@@ -1,0 +1,31 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Instalar dependencias
+        run: pip install -e libs/core -r services/ingestion/requirements.txt -r services/agent/requirements.txt pytest ruff
+      - name: Lint
+        run: ruff check .
+      - name: Tests unitarios
+        run: pytest -q
+      - name: El grafo compila y exporta su diagrama
+        run: |
+          cd services/agent && python - <<'PY'
+          from app.graph.builder import build_graph, mermaid
+          from app.graph.doc_agent import DocAgent
+          from app.graph.research_agent import ResearchAgent
+          from app.graph.supervisor import Supervisor
+          g = build_graph(Supervisor(None, lambda: []), DocAgent(None, None), ResearchAgent(None, lambda q, n: []))
+          print(mermaid(g))
+          PY
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imágenes multi-stage
+        run: cp .env.example .env && docker compose build

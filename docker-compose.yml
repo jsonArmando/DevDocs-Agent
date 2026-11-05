@@ -1,0 +1,66 @@
+# Un solo comando:  docker compose up -d --build
+# Modo 100 % local (sin API keys de LLM):  docker compose --profile local up -d --build   (ver README)
+name: devdocs-agent
+
+x-app-env: &app-env
+  env_file: .env
+  environment:
+    QDRANT_URL: http://qdrant:6333
+    INGESTION_URL: http://ingestion:8001
+    AGENT_URL: http://agent:8002
+    MODELS_CACHE_DIR: /models
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.17.0
+    ports: ["6333:6333"]
+    volumes: [qdrant_data:/qdrant/storage]
+
+  ingestion:
+    build: { context: ., dockerfile: services/ingestion/Dockerfile }
+    <<: *app-env
+    ports: ["8001:8001"]
+    volumes: [models_cache:/models]
+    depends_on:
+      qdrant: { condition: service_started }   # la ingesta reintenta hasta que Qdrant responda
+
+  agent:
+    build: { context: ., dockerfile: services/agent/Dockerfile }
+    <<: *app-env
+    ports: ["8002:8002"]
+    volumes: [models_cache:/models, agent_data:/data]
+    depends_on:
+      ingestion: { condition: service_healthy }
+
+  frontend:
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    environment:
+      AGENT_URL: http://agent:8002
+      INGESTION_URL: http://ingestion:8001
+    ports: ["8501:8501"]
+    depends_on:
+      agent: { condition: service_healthy }
+
+  # ------------------------------------------------------------------ opcional
+  ollama:                       # LLM local: docker compose --profile local up -d
+    image: ollama/ollama:latest
+    profiles: ["local"]
+    ports: ["11434:11434"]
+    volumes: [ollama_models:/root/.ollama]
+
+  eval:                         # docker compose --profile eval run --rm eval
+    build: { context: ., dockerfile: services/agent/Dockerfile }
+    profiles: ["eval"]
+    user: "0"                   # escribe eval/results en el volumen montado del host
+    <<: *app-env
+    working_dir: /work
+    volumes: [./eval:/work/eval]
+    command: ["python", "eval/run_eval.py"]
+    depends_on:
+      agent: { condition: service_healthy }
+
+volumes:
+  qdrant_data:
+  models_cache:
+  agent_data:
+  ollama_models:

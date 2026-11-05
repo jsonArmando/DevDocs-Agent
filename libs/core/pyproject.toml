@@ -1,0 +1,19 @@
+[project]
+name = "docs-core"
+version = "1.0.0"
+description = "Núcleo compartido: configuración, chunking, embeddings locales y repositorio Qdrant"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "qdrant-client>=1.12,<2",
+  "fastembed>=0.5,<1",
+  "pypdf>=5,<7",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["docs_core*"]
